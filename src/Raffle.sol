@@ -37,6 +37,11 @@ contract Raffle is VRFConsumerBaseV2Plus {
     error Raffle__SendMoreETHtoEnter();
     error Raffle__TransferFailed();
     error Raffle__NotOpen();
+    error Raffle_UpkeepNotNeeded(
+        uint256 balance,
+        uint256 playerslength,
+        uint256 raffleState
+    );
 
     /**
      * Type Declarations
@@ -61,6 +66,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
      */
 
     event RaffleEntered(address indexed player);
+    event WinnerPicked(address indexed s_recentWinner);
 
     constructor(
         uint256 entranceFee,
@@ -87,19 +93,37 @@ contract Raffle is VRFConsumerBaseV2Plus {
         }
 
         if (s_raffleState != RaffleState.OPEN) {
-            revert Raffle__NotOpen;
+            revert Raffle__NotOpen();
         }
         s_players.push(payable(msg.sender));
         emit RaffleEntered(msg.sender);
     }
 
+    function checkUpKeep(
+        bytes memory /* checkData */
+    ) public view returns (bool upKeepNeeded, bytes memory /* performData */) {
+        bool timeHasPassed = ((block.timestamp - s_lastTimeStamp) >=
+            i_interval);
+        bool isOpen = s_raffleState == RaffleState.OPEN;
+        bool hasBalance = address(this).balance == 0;
+        bool hasPlayers = s_players.length > 0;
+        upKeepNeeded = timeHasPassed && isOpen && hasBalance && hasPlayers;
+
+        return (upKeepNeeded, "");
+    }
+
     // Get a random number
     // Use random number to pick a player
     // Be automatically called
-
-    function pickWinner() external {
-        if ((block.timestamp - s_lastTimeStamp) < i_interval) {
-            revert();
+    // we can use chainlink automation to atuomate this function
+    function performUpKeep(bytes calldata /* performData */) external {
+        (bool upKeedNeed, ) = checkUpKeep("");
+        if (!upKeedNeed) {
+            revert Raffle_UpkeepNotNeeded(
+                address(this).balance,
+                s_players.length,
+                uint256(s_raffleState)
+            );
         }
         s_raffleState = RaffleState.CALCULATING;
         // generate a random number
@@ -116,19 +140,35 @@ contract Raffle is VRFConsumerBaseV2Plus {
                     VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
                 )
             });
-        uint256 requestId = s_vrfCoordinator.requestRandomWords(request);
+        s_vrfCoordinator.requestRandomWords(request);
     }
 
+    // CEI : Checks, Effects, Interactions Pattern
     function fulfillRandomWords(
-        uint256 requestId,
+        uint256 /* requestID */,
         uint256[] calldata randomWords
     ) internal virtual override {
+        /**
+         * Checks
+         */
+
+        /**
+         * Effects -> updating state variables accordingly
+         */
         uint256 indexOFWinner = randomWords[0] % s_players.length;
         address payable recentWinner = s_players[indexOFWinner];
         s_recentWinner = recentWinner;
         s_raffleState = RaffleState.OPEN;
-        (bool success, ) = recentWinner.call{value: address(this).balance}("");
 
+        s_players = new address payable[](0);
+        s_lastTimeStamp = block.timestamp;
+
+        (bool success, ) = recentWinner.call{value: address(this).balance}("");
+        emit WinnerPicked(s_recentWinner);
+
+        /**
+         * Interactions -> External Contract Interactions
+         */
         if (!(success)) {
             revert Raffle__TransferFailed();
         }
