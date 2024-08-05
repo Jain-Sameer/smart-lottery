@@ -3,6 +3,7 @@ pragma solidity 0.8.19;
 
 import {Script} from "forge-std/Script.sol";
 import {VRFCoordinatorV2_5Mock} from "../lib/chainlink-brownie-contracts/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
+import {LinkToken} from "../test/mocks/LinkToken.sol";
 
 abstract contract CodeConstants {
     uint96 public MOCK_BASE_FEW = 0.25 ether;
@@ -22,6 +23,8 @@ contract HelperConfig is Script, CodeConstants {
         bytes32 gasLane; // keyhash,
         uint256 subscriptionID;
         uint32 callbackGasLimit;
+        address linkTokenAddress;
+        address account;
     }
 
     NetworkConfig public localNetworkConfig;
@@ -56,8 +59,10 @@ contract HelperConfig is Script, CodeConstants {
                 interval: 30,
                 vrfCoordinator: 0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B,
                 gasLane: 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae,
-                subscriptionID: 0,
-                callbackGasLimit: 500000
+                subscriptionID: 76842541667191232280402919432467935856675975306778334153970471516604440311444,
+                callbackGasLimit: 500000,
+                linkTokenAddress: 0x779877A7B0D9E8603169DdbD7836e478b4624789,
+                account: 0x2cA1469804EEb60D897499da8DDA674eEae7bFA9
             });
     }
 
@@ -72,6 +77,7 @@ contract HelperConfig is Script, CodeConstants {
             MOCK_GAS_PRICE_LINK,
             MOCK_WEI_PER_LINK
         );
+        LinkToken mockLinkToken = new LinkToken();
         vm.stopBroadcast();
 
         localNetworkConfig = NetworkConfig({
@@ -80,7 +86,10 @@ contract HelperConfig is Script, CodeConstants {
             vrfCoordinator: address(vrfCoordinatorMock),
             gasLane: 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae, //doesnt matter
             subscriptionID: 0,
-            callbackGasLimit: 500000
+            callbackGasLimit: 500000,
+            // linkTokenAddress: 0x779877A7B0D9E8603169DdbD7836e478b4624789
+            linkTokenAddress: address(mockLinkToken),
+            account: 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38 //default sender
         });
         return localNetworkConfig;
     }
